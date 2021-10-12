@@ -1,0 +1,38 @@
+package common;
+
+import java.awt.Image;
+import java.awt.image.BufferedImage;
+import java.io.Serializable;
+
+import javax.swing.ImageIcon;
+
+public class Card implements Serializable{
+    private String value;
+    private String palo;
+ 	
+    public Card(String value, String palo) {
+		this.value = value;
+		this.palo = palo;
+	}
+
+	public String getValor() {
+		return value;
+	}
+
+	public void setValor(String value) {
+		this.value = value;
+	}
+
+	public String getPalo() {
+		return palo;
+	}
+
+	public void setPalo(String palo) {
+		this.palo = palo;
+	}
+	
+	public String toString() {
+		return value + palo;
+	}
+	
+}

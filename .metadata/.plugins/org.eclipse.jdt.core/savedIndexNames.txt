@@ -1,0 +1,4 @@
+INDEX VERSION 1.131+D:\UNIVALLE\2021-I\PROGRAMACION INTERACTIVA\Eclipse\Mini proyecto 4. Black Jack\.metadata\.plugins\org.eclipse.jdt.core
+714836089.index
+990193225.index
+1341896200.index

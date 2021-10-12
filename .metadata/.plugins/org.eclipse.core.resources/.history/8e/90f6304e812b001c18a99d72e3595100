@@ -1,0 +1,75 @@
+package common;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
+
+public class BlackJackData implements Serializable{
+	private String[] idPlayers;
+	private ArrayList<Carta> player1CardsHand, player2CardsHand, dealerCardsHand;
+	private int[] cardsHandValue;
+	private Carta card;
+	private String message;
+	private String player, playerStatus;
+	
+	public String getPlayer() {
+		return player;
+	}
+	public void setPlayer(String player) {
+		this.player = player;
+	}
+	
+	public String getPlayerStatus() {
+		return playerStatus;
+	}
+	public void setPlayerStatus(String playerStatus) {
+		this.playerStatus = playerStatus;
+	}
+		
+	public String[] getIdPlayers() {
+		return idPlayers;
+	}
+	public void setIdPlayers(String[] idPlayers) {
+		this.idPlayers = idPlayers;
+	}
+	
+	public ArrayList<Carta> getPlayer1CardsHand() {
+		return player1CardsHand;
+	}
+	public void setPlayer1CardsHand(ArrayList<Carta> player1CardsHand) {
+		this.player1CardsHand = player1CardsHand;
+	}
+	
+	public ArrayList<Carta> getPlayer2CardsHand() {
+		return player2CardsHand;
+	}
+	public void setPlayer2CardsHand(ArrayList<Carta> player2CardsHand) {
+		this.player2CardsHand = player2CardsHand;
+	}
+	
+	public ArrayList<Carta> getDealerCardsHand() {
+		return dealerCardsHand;
+	}
+	public void setDealerCardsHand(ArrayList<Carta> dealerCardsHand) {
+		this.dealerCardsHand = dealerCardsHand;
+	}
+	
+	public String getMessage() {
+		return message;
+	}
+	public void setMensaje(String message) {
+		this.message = message;
+	}
+	public void setValorManos(int[] cardsHandValue) {
+		this.cardsHandValue=cardsHandValue;
+	}
+	public int[] getValorManos() {
+		return cardsHandValue;	
+	}
+	public void setCarta(Carta card) {
+		this.card=card;
+	}
+	public Carta getCarta() {
+		return card;
+	}
+}

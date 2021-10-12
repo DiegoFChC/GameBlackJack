@@ -1,0 +1,516 @@
+package serverbj;
+
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import comunes.Baraja;
+import comunes.Carta;
+import comunes.DatosBlackJack;
+
+/* Clase encargada de realizar la gestión del juego, esto es, el manejo de turnos y estado del juego.
+ * También gestiona al jugador Dealer. 
+ * El Dealer tiene una regla de funcionamiento definida:
+ * Pide carta con 16 o menos y Planta con 17 o mas.
+ */
+public class ServerBJ implements Runnable{
+	//constantes para manejo de la conexion.
+	public static final int PORT = 7377;
+	public static final String IP = "127.0.0.1";
+	public static final int QUEUE_LENGTH = 2;
+
+	// variables para funcionar como servidor
+	private ServerSocket server;
+	private Socket connectionPlayer;
+	
+	//variables para manejo de hilos
+	private ExecutorService threadManager;
+	private Lock gameLock;
+	private Condition waitStart, waitTurn, finish;
+	private Player[] players;
+	
+	//variables de control del juego
+	private String[] idPlayers;
+	private int playerInTurn;
+	//private boolean iniciarJuego;
+	private Baraja deck;
+	private ArrayList<ArrayList<Carta>> playersCardsHand;
+	private ArrayList<Carta> player1CardsHand;
+	private ArrayList<Carta> player2CardsHand;
+	private ArrayList<Carta> dealerCardsHand;
+	private int[] cardsHandValue;
+	private DatosBlackJack dataSend;
+	
+	public ServerBJ() {
+	    //inicializar variables de control del juego
+		initializeRoundControlVariables();
+	    //inicializar las variables de manejo de hilos
+		initializeThreadsManagerVariables();
+		//crear el servidor
+    	try {
+    		showMessage("Starting the server...");
+			server = new ServerSocket(PORT, QUEUE_LENGTH);			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+    private void initializeThreadsManagerVariables() {
+		// TODO Auto-generated method stub
+    	threadManager = Executors.newFixedThreadPool(QUEUE_LENGTH);
+    	gameLock = new ReentrantLock();
+    	waitStart = gameLock.newCondition();
+    	waitTurn = gameLock.newCondition();
+    	finish = gameLock.newCondition();
+    	players = new Player[QUEUE_LENGTH];	
+	}
+
+	private void initializeRoundControlVariables() {
+		// TODO Auto-generated method stub
+    	 //Variables de control del juego.
+		
+		idPlayers = new String[2];
+		cardsHandValue = new int[3];
+		
+		deck = new Baraja();
+		Carta card;
+		
+		player1CardsHand = new ArrayList<Carta>();
+		player2CardsHand = new ArrayList<Carta>();
+		dealerCardsHand = new ArrayList<Carta>();
+		
+		//reparto inicial jugadores 1 y 2
+		for(int i=1;i<=2;i++) {
+		  card = deck.getCarta();
+		  player1CardsHand.add(card);
+		  calculateCardsHandValue(card, 0);
+		  card = deck.getCarta();
+		  player2CardsHand.add(card);
+		  calculateCardsHandValue(card, 1);
+		}
+		//Carta inicial Dealer
+		card = deck.getCarta();
+		dealerCardsHand.add(card);
+		calculateCardsHandValue(card,2);
+		
+		//gestiona las tres manos en un solo objeto para facilitar el manejo del hilo
+		playersCardsHand = new ArrayList<ArrayList<Carta>>(3);
+		playersCardsHand.add(player1CardsHand);
+		playersCardsHand.add(player2CardsHand);
+		playersCardsHand.add(dealerCardsHand);
+	}
+
+	private void calculateCardsHandValue(Carta card, int i) {
+		// TODO Auto-generated method stub
+    	
+			if(card.getValor().equals("As")) {
+				cardsHandValue[i]+=11;
+			}else {
+				if(card.getValor().equals("J") || card.getValor().equals("Q")
+						   || card.getValor().equals("K")) {
+					cardsHandValue[i]+=10;
+				}else {
+					cardsHandValue[i]+=Integer.parseInt(card.getValor()); 
+				}
+		}
+	}
+	
+	public void start() {
+       	//esperar a los clientes
+		showMessage("Waiting for the players...");
+    	
+    	for(int i = 0; i < QUEUE_LENGTH;i++) {
+    		try {
+    			connectionPlayer = server.accept();
+    			players[i] = new Player(connectionPlayer, i);
+				threadManager.execute(players[i]);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}	
+    	} 	
+    }
+    
+	private void showMessage(String message) {
+		System.out.println(message);
+	}
+	
+	private void startGameRound() {
+		
+		this.showMessage("Blocking the server to wake up player 1");
+		gameLock.lock();
+    	
+    	//despertar al jugador 1 porque es su turno
+    	try {
+    		this.showMessage("Waking up player 1 to start the game");
+    		players[0].setSuspendido(false);
+        	waitStart.signal();
+    	}catch(Exception e) {
+    		
+    	}finally {
+    		this.showMessage("Unlocking the server after waking up Player 1 to start the game");
+    		gameLock.unlock();
+    	}			
+	}
+	
+    private boolean roundIsOver() {
+       return false;	
+    }
+    
+    private void analyzeMessage(String input, int playerIndex) {
+		// TODO Auto-generated method stub
+        //garantizar que solo se analice la petición del jugador en turno.
+    	while(playerIndex! = playerInTurn) {
+    		gameLock.lock();
+    		try {
+    			waitTurn.await();
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+    		gameLock.unlock();
+    	}
+    	
+    	//valida turnos para jugador 0 o 1
+        	
+    	if(input.equals("ask")) { //Ask: Pedir
+    		//dar carta 
+    		showMessage("Se envió carta al jugador "+idPlayers[playerIndex]);
+    		Carta carta = deck.getCarta();
+    		//adicionar la carta a la mano del jugador en turno
+    		playersCardsHand.get(playerIndex).add(carta);
+    		calculateCardsHandValue(carta, playerIndex);
+    		
+    		dataSend = new DatosBlackJack();
+    		dataSend.setIdJugadores(idPlayers);
+    		dataSend.setValorManos(cardsHandValue);
+			dataSend.setCarta(carta);
+			dataSend.setJugador(idPlayers[playerIndex]);
+    		//determinar qué sucede con la carta dada en la mano del jugador y 
+			//mandar mensaje a todos los jugadores
+    		if(cardsHandValue[playerIndex]>21) {
+    			//jugador Voló
+    			dataSend.setMensaje(idPlayers[playerIndex]+" tienes " + cardsHandValue[playerIndex]+" volaste :(");	
+    			dataSend.setJugadorEstado("voló");
+	    		
+	    		players[0].enviarMensajeCliente(dataSend);
+	    		players[1].enviarMensajeCliente(dataSend);
+	    		
+	    		//notificar a todos que jugador sigue
+	    		if(playerInTurn==0) {
+	        		
+	    			dataSend = new DatosBlackJack();
+	    			dataSend.setIdJugadores(idPlayers);
+	    			dataSend.setValorManos(cardsHandValue);
+	    			dataSend.setJugador(idPlayers[1]);
+	    			dataSend.setJugadorEstado("iniciar");
+	    			dataSend.setMensaje(idPlayers[1]+" te toca jugar y tienes " + cardsHandValue[1]);
+					
+					players[0].enviarMensajeCliente(dataSend);
+					players[1].enviarMensajeCliente(dataSend);
+					
+					//levantar al jugador en espera de turno
+					
+					gameLock.lock();
+		    		try {
+						//esperarInicio.await();
+		    			players[0].setSuspendido(true);
+						waitTurn.signalAll();
+						playerInTurn++;
+					}finally {
+						gameLock.unlock();
+					}
+	        	} else {//era el jugador 2 entonces se debe iniciar el dealer
+	        		//notificar a todos que le toca jugar al dealer
+	        		dataSend = new DatosBlackJack();
+	        		dataSend.setIdJugadores(idPlayers);
+	        		dataSend.setValorManos(cardsHandValue);
+	        		dataSend.setJugador("dealer");
+	        		dataSend.setJugadorEstado("iniciar");
+	        		dataSend.setMensaje("Dealer se repartirá carta");
+					
+					players[0].enviarMensajeCliente(dataSend);
+					players[1].enviarMensajeCliente(dataSend);
+					
+					iniciarDealer();
+	        	}		
+    		}else {//jugador no se pasa de 21 puede seguir jugando
+    			dataSend.setCarta(carta);
+    			dataSend.setJugador(idPlayers[playerIndex]);
+    			dataSend.setMensaje(idPlayers[playerIndex]+" ahora tienes "+cardsHandValue[playerIndex]);
+    			dataSend.setJugadorEstado("sigue");
+	    		
+	    		players[0].enviarMensajeCliente(dataSend);
+	    		players[1].enviarMensajeCliente(dataSend);
+	    		
+    		}
+    	}else {
+    		//jugador en turno plantó
+    		dataSend = new DatosBlackJack();
+    		dataSend.setIdJugadores(idPlayers);
+    		dataSend.setValorManos(cardsHandValue);
+    		dataSend.setJugador(idPlayers[playerIndex]);
+    		dataSend.setMensaje(idPlayers[playerIndex]+" se plantó");
+    		dataSend.setJugadorEstado("plantó");
+    		
+    		players[0].enviarMensajeCliente(dataSend);		    		
+    		players[1].enviarMensajeCliente(dataSend);
+    		
+    		
+    		//notificar a todos el jugador que sigue en turno
+    		if(playerInTurn==0) {
+        		
+    			dataSend = new DatosBlackJack();
+    			dataSend.setIdJugadores(idPlayers);
+    			dataSend.setValorManos(cardsHandValue);
+    			dataSend.setJugador(idPlayers[1]);
+    			dataSend.setJugadorEstado("iniciar");
+    			dataSend.setMensaje(idPlayers[1]+" te toca jugar y tienes " + cardsHandValue[1]);
+				
+				players[0].enviarMensajeCliente(dataSend);
+				players[1].enviarMensajeCliente(dataSend);
+				
+				//levantar al jugador en espera de turno
+				
+				gameLock.lock();
+	    		try {
+					//esperarInicio.await();
+	    			players[playerIndex].setSuspendido(true);
+					waitTurn.signalAll();
+					playerInTurn++;
+				}finally {
+					gameLock.unlock();
+				}
+        	} else {
+        		//notificar a todos que le toca jugar al dealer
+        		dataSend = new DatosBlackJack();
+        		dataSend.setIdJugadores(idPlayers);
+        		dataSend.setValorManos(cardsHandValue);
+        		dataSend.setJugador("dealer");
+        		dataSend.setJugadorEstado("iniciar");
+        		dataSend.setMensaje("Dealer se repartirá carta");
+				
+				players[0].enviarMensajeCliente(dataSend);
+				players[1].enviarMensajeCliente(dataSend);
+			
+				iniciarDealer();
+        	}	
+    	}
+   } 
+    
+    public void iniciarDealer() {
+       //le toca turno al dealer.
+    	Thread dealer = new Thread(this);
+    	dealer.start();
+    }
+    
+    /*The Class Jugador. Clase interna que maneja el servidor para gestionar la comunicación
+     * con cada cliente Jugador que se conecte
+     */
+    private class Player implements Runnable{
+       
+    	//varibles para gestionar la comunicación con el cliente (Jugador) conectado
+        private Socket conexionCliente;
+    	private ObjectOutputStream out;
+    	private ObjectInputStream in;
+    	private String entrada;
+    	
+    	//variables de control
+    	private int indexJugador;
+    	private boolean suspendido;
+  
+		public Player(Socket conexionCliente, int indexJugador) {
+			this.conexionCliente = conexionCliente;
+			this.indexJugador = indexJugador;
+			suspendido = true;
+			//crear los flujos de E/S
+			try {
+				out = new ObjectOutputStream(conexionCliente.getOutputStream());
+				out.flush();
+				in = new ObjectInputStream(conexionCliente.getInputStream());
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}		
+		}	
+				
+		private void setSuspendido(boolean suspendido) {
+			this.suspendido = suspendido;
+		}
+	   
+		@Override
+		public void run() {
+			// TODO Auto-generated method stub	
+			//procesar los mensajes eviados por el cliente
+			
+			//ver cual jugador es 
+			if(indexJugador==0) {
+				//es jugador 1, debe ponerse en espera a la llegada del otro jugador
+				
+				try {
+					//guarda el nombre del primer jugador
+					idPlayers[0] = (String)in.readObject();
+					showMessage("Hilo establecido con jugador (1) "+idPlayers[0]);
+				} catch (ClassNotFoundException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+				} catch (IOException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+				}
+				showMessage("bloquea servidor para poner en espera de inicio al jugador 1");
+				gameLock.lock(); //bloquea el servidor
+				
+				while(suspendido) {
+					showMessage("Parando al Jugador 1 en espera del otro jugador...");
+					try {
+						waitStart.await();
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}finally {
+						showMessage("Desbloquea Servidor luego de bloquear al jugador 1");
+						gameLock.unlock();
+					}
+				}
+				
+				//ya se conectó el otro jugador, 
+				//le manda al jugador 1 todos los datos para montar la sala de Juego
+				//le toca el turno a jugador 1
+				
+				showMessage("manda al jugador 1 todos los datos para montar SalaJuego");
+				dataSend = new DatosBlackJack();
+				dataSend.setManoDealer(playersCardsHand.get(2));
+				dataSend.setManoJugador1(playersCardsHand.get(0));
+				dataSend.setManoJugador2(playersCardsHand.get(1));		
+				dataSend.setIdJugadores(idPlayers);
+				dataSend.setValorManos(cardsHandValue);
+				dataSend.setMensaje("Inicias "+idPlayers[0]+" tienes " + cardsHandValue[0]);
+				enviarMensajeCliente(dataSend);
+				playerInTurn=0;
+			}else {
+				   //Es jugador 2
+				   //le manda al jugador 2 todos los datos para montar la sala de Juego
+				   //jugador 2 debe esperar su turno
+				try {
+					idPlayers[1]=(String)in.readObject();
+					showMessage("Hilo jugador (2)"+idPlayers[1]);
+				} catch (ClassNotFoundException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+				} catch (IOException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+				}
+				showMessage("manda al jugador 2 el nombre del jugador 1");
+				
+				dataSend = new DatosBlackJack();
+				dataSend.setManoDealer(playersCardsHand.get(2));
+				dataSend.setManoJugador1(playersCardsHand.get(0));
+				dataSend.setManoJugador2(playersCardsHand.get(1));			
+				dataSend.setIdJugadores(idPlayers);
+				dataSend.setValorManos(cardsHandValue);
+				dataSend.setMensaje("Inicias "+idPlayers[0]+" tienes " + cardsHandValue[0]);
+				enviarMensajeCliente(dataSend);
+				
+				startGameRound(); //despertar al jugador 1 para iniciar el juego
+				showMessage("Bloquea al servidor para poner en espera de turno al jugador 2");
+				gameLock.lock();
+				try {
+					showMessage("Pone en espera de turno al jugador 2");
+					waitTurn.await();
+					showMessage("Despierta de la espera de inicio del juego al jugador 1");
+                    //
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}finally {
+					gameLock.unlock();
+				}	
+			}
+			
+			while(!roundIsOver()) {
+				try {
+					entrada = (String) in.readObject();
+					analyzeMessage(entrada,indexJugador);
+				} catch (ClassNotFoundException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					//controlar cuando se cierra un cliente
+				}
+			}
+			//cerrar conexión
+		}
+		
+		public void enviarMensajeCliente(Object mensaje) {
+			try {  
+				out.writeObject(mensaje);
+				out.flush();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}			
+    }//fin inner class Jugador      
+
+    //Jugador dealer emulado por el servidor
+	@Override
+	public void run() {
+		// TODO Auto-generated method stub
+		showMessage("Incia el dealer ...");
+        boolean pedir = true;
+        
+        while(pedir) {
+		  	Carta carta = deck.getCarta();
+			//adicionar la carta a la mano del dealer
+		  	playersCardsHand.get(2).add(carta);
+			calculateCardsHandValue(carta, 2);
+			
+			showMessage("El dealer recibe "+carta.toString()+" suma "+ cardsHandValue[2]);
+			
+
+			dataSend = new DatosBlackJack();
+			dataSend.setCarta(carta);
+			dataSend.setJugador("dealer");
+				
+			if(cardsHandValue[2]<=16) {
+				dataSend.setJugadorEstado("sigue");
+				dataSend.setMensaje("Dealer ahora tiene "+cardsHandValue[2]);
+				showMessage("El dealer sigue jugando");
+			}else {
+				if(cardsHandValue[2]>21) {
+					dataSend.setJugadorEstado("voló");
+					dataSend.setMensaje("Dealer ahora tiene "+cardsHandValue[2]+" voló :(");
+					pedir=false;
+					showMessage("El dealer voló");
+				}else {
+					dataSend.setJugadorEstado("plantó");
+					dataSend.setMensaje("Dealer ahora tiene "+cardsHandValue[2]+" plantó");
+					pedir=false;
+					showMessage("El dealer plantó");
+				}
+			}
+			//envia la jugada a los otros jugadores
+			dataSend.setCarta(carta);
+			players[0].enviarMensajeCliente(dataSend);
+			players[1].enviarMensajeCliente(dataSend);
+				
+        }//fin while
+        
+	}
+    
+}//Fin class ServidorBJ

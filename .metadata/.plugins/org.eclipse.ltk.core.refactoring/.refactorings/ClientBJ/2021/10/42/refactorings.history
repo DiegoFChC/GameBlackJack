@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename package &apos;clientebj&apos; to &apos;clientbj&apos;&#x0D;&#x0A;- Original project: &apos;ClientBJ&apos;&#x0D;&#x0A;- Original element: &apos;ClientBJ/src/clientebj&apos;&#x0D;&#x0A;- Renamed element: &apos;ClientBJ/src/clientbj&apos;&#x0D;&#x0A;- Update references to refactored element&#x0D;&#x0A;- Update textual occurrences in comments and strings" description="Rename package &apos;clientebj&apos;" flags="589830" hierarchical="false" id="org.eclipse.jdt.ui.rename.package" input="/src&lt;clientebj" name="clientbj" qualified="false" references="true" stamp="1634058202008" textual="false" version="1.0"/>
+</session>
