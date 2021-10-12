@@ -1,2 +1,2 @@
 # GameBlackJack
-Game BlackJack in java
+Game **_BlackJack_** in java
