@@ -19,39 +19,39 @@ public class Deck {
    private static final int TOTAL_IMAGES=SUITS*VALUES+1;
   
    private ArrayList<Card> deck;
-   private Random random;
+   private Random aleatorio;
    
    public Deck() {
-	   random = new Random();
+	   aleatorio = new Random();
 	   deck = new ArrayList<Card>();
-	   String value;
+	   String valor;
 	   for(int i=1;i<=4;i++) {
 		   for(int j=2;j<=14;j++) {
 			   switch(j) {
-			   case 11: value="J";break;
-			   case 12: value="Q";break;
-			   case 13: value="K";break;
-			   case 14: value="As";break;
-			   default: value= String.valueOf(j);break;
+			   case 11: valor="J";break;
+			   case 12: valor="Q";break;
+			   case 13: valor="K";break;
+			   case 14: valor="As";break;
+			   default: valor= String.valueOf(j);break;
 			   } 
 			   switch(i) {
-			   case 1: deck.add(new Card(value,"C"));break;
-			   case 2: deck.add(new Card(value,"D"));break;
-			   case 3: deck.add(new Card(value,"P"));break;
-			   case 4: deck.add(new Card(value,"T"));break;
+			   case 1: deck.add(new Card(valor,"C"));break;
+			   case 2: deck.add(new Card(valor,"D"));break;
+			   case 3: deck.add(new Card(valor,"P"));break;
+			   case 4: deck.add(new Card(valor,"T"));break;
 			   }
 		   }
 	   }
    }
      
-   public Card getCard() {
-	   int index = random.nextInt(deckSize());
-	   Card card = deck.get(index);
+   public Card getCarta() {
+	   int index = aleatorio.nextInt(mazoSize());
+	   Card carta = deck.get(index);
 	   deck.remove(index); //elimina del mazo la carta usada
-	   return card;
+	   return carta;
    }
    
-   public int deckSize() {
+   public int mazoSize() {
 	   return deck.size();
    }
 }

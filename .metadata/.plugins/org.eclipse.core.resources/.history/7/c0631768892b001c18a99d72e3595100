@@ -45,13 +45,13 @@ public class Deck {
    }
      
    public Card getCard() {
-	   int index = random.nextInt(deckSize());
-	   Card card = deck.get(index);
+	   int index = random.nextInt(mazoSize());
+	   Card carta = deck.get(index);
 	   deck.remove(index); //elimina del mazo la carta usada
-	   return card;
+	   return carta;
    }
    
-   public int deckSize() {
+   public int mazoSize() {
 	   return deck.size();
    }
 }

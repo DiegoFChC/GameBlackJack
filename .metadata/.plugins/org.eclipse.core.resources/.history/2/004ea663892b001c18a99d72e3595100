@@ -93,15 +93,15 @@ public class ServerBJ implements Runnable{
 		
 		//reparto inicial jugadores 1 y 2
 		for(int i=1;i<=2;i++) {
-		  card = deck.getCard();
+		  card = deck.getCarta();
 		  player1CardsHand.add(card);
 		  calculateCardsHandValue(card, 0);
-		  card = deck.getCard();
+		  card = deck.getCarta();
 		  player2CardsHand.add(card);
 		  calculateCardsHandValue(card, 1);
 		}
 		//Carta inicial Dealer
-		card = deck.getCard();
+		card = deck.getCarta();
 		dealerCardsHand.add(card);
 		calculateCardsHandValue(card,2);
 		
@@ -188,7 +188,7 @@ public class ServerBJ implements Runnable{
     	if(input.equals("hit")) { //Hit: Pedir
     		//dar carta 
     		showMessage("Card was sent to the player " + idPlayers[playerIndex]);
-    		Card card = deck.getCard();
+    		Card card = deck.getCarta();
     		//adicionar la carta a la mano del jugador en turno
     		playersCardsHand.get(playerIndex).add(card);
     		calculateCardsHandValue(card, playerIndex);
@@ -475,7 +475,7 @@ public class ServerBJ implements Runnable{
         boolean hit = true;
         
         while(hit) {
-		  	Card card = deck.getCard();
+		  	Card card = deck.getCarta();
 			//adicionar la carta a la mano del dealer
 		  	playersCardsHand.get(2).add(card);
 			calculateCardsHandValue(card, 2);
